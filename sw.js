@@ -1,10 +1,10 @@
 const CACHE_NAME = 'sudoku-solver-v1';
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/images/icon-192.png',
-  '/images/icon-512.png'
+  './',
+  'index.html',
+  'manifest.json',
+  'images/icon-192.png',
+  'images/icon-512.png'
 ];
 
 // Install event
