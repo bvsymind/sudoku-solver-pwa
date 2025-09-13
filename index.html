@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#3b82f6">
+    <title>Sudoku Solver</title>
+    <link rel="manifest" href="/manifest.json">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <style>
+        .sudoku-cell {
+            width: 50px;
+            height: 50px;
+            text-align: center;
+            font-size: 20px;
+            border: 1px solid #ccc;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        .sudoku-cell.highlight {
+            background-color: #bfdbfe;
+        }
+        .sudoku-cell:focus {
+            outline: 2px solid #3b82f6;
+            z-index: 10;
+        }
+        .sudoku-grid {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            gap: 0;
+            border: 2px solid #000;
+        }
+        .border-right-thick {
+            border-right: 2px solid #000;
+        }
+        .border-bottom-thick {
+            border-bottom: 2px solid #000;
+        }
+        @media (max-width: 640px) {
+            .sudoku-cell {
+                width: 35px;
+                height: 35px;
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
+    <div class="max-w-2xl w-full bg-white rounded-xl shadow-lg p-6">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Sudoku Solver</h1>
+        
+        <div class="flex flex-col items-center mb-8">
+            <div class="sudoku-grid mb-4">
+                <!-- Sudoku grid will be generated here -->
+            </div>
+
+            <!-- Mobile number pad -->
+            <div class="grid grid-cols-9 gap-1 mb-4 w-full max-w-md">
+                <button class="number-btn bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-3 rounded transition" data-number="1">1</button>
+                <button class="number-btn bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-3 rounded transition" data-number="2">2</button>
+                <button class="number-btn bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-3 rounded transition" data-number="3">3</button>
+                <button class="number-btn bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-3 rounded transition" data-number="4">4</button>
+                <button class="number-btn bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-3 rounded transition" data-number="5">5</button>
+                <button class="number-btn bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-3 rounded transition" data-number="6">6</button>
+                <button class="number-btn bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-3 rounded transition" data-number="7">7</button>
+                <button class="number-btn bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-3 rounded transition" data-number="8">8</button>
+                <button class="number-btn bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-3 rounded transition" data-number="9">9</button>
+            </div>
+            
+            <div class="flex flex-wrap gap-3 justify-center">
+                <button id="solve-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition flex items-center gap-2">
+                    <i data-feather="cpu"></i> Solve
+                </button>
+                <button id="clear-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition flex items-center gap-2">
+                    <i data-feather="trash-2"></i> Clear
+                </button>
+                <button id="erase-btn" class="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition flex items-center gap-2">
+                    <i data-feather="x"></i> Erase
+                </button>
+                <button id="example-btn" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition flex items-center gap-2">
+                    <i data-feather="book-open"></i> Example
+                </button>
+            </div>
+        </div>
+        
+        <div id="status" class="text-center text-gray-600 mb-4"></div>
+        
+        <div class="text-sm text-gray-500 text-center">
+            <p>Enter numbers 1-9 in the grid. Click "Solve" to find the solution.</p>
+            <p>Made with ❤️ by bvsymind</p>
+        </div>
+    </div>
+
+    <script>
+        // Register service worker
+        if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(registration => {
+                console.log('SW registered: ', registration);
+            })
+            .catch(error => {
+                console.log('SW registration failed: ', error);
+            });
+        });
+        }
+        
+
+        document.addEventListener('DOMContentLoaded', function() {
+            feather.replace();
+            
+            const gridContainer = document.querySelector('.sudoku-grid');
+            const solveBtn = document.getElementById('solve-btn');
+            const clearBtn = document.getElementById('clear-btn');
+            const exampleBtn = document.getElementById('example-btn');
+            const statusEl = document.getElementById('status');
+            
+            let activeCell = null;
+            
+            // Create Sudoku grid
+            for (let i = 0; i < 9; i++) {
+                for (let j = 0; j < 9; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'sudoku-cell';
+                    cell.dataset.row = i;
+                    cell.dataset.col = j;
+                    cell.dataset.value = '';
+                    cell.tabIndex = 0;
+                    
+                    // Add thick borders for 3x3 blocks
+                    if ((j + 1) % 3 === 0 && j < 8) {
+                        cell.classList.add('border-right-thick');
+                    }
+                    if ((i + 1) % 3 === 0 && i < 8) {
+                        cell.classList.add('border-bottom-thick');
+                    }
+                    
+                    // Handle cell clicks
+                    cell.addEventListener('click', function() {
+                        if (this.dataset.value) {
+                            highlightNumber(this.dataset.value);
+                        } else {
+                            clearHighlights();
+                        }
+                    });
+
+                    // Handle keyboard navigation
+                    cell.addEventListener('keydown', function(e) {
+                        const row = parseInt(this.dataset.row);
+                        const col = parseInt(this.dataset.col);
+                        
+                        // Arrow key navigation
+                        if (e.key.startsWith('Arrow')) {
+                            e.preventDefault();
+                            let nextRow = row, nextCol = col;
+                            
+                            switch(e.key) {
+                                case 'ArrowUp': nextRow = Math.max(0, row - 1); break;
+                                case 'ArrowDown': nextRow = Math.min(8, row + 1); break;
+                                case 'ArrowLeft': nextCol = Math.max(0, col - 1); break;
+                                case 'ArrowRight': nextCol = Math.min(8, col + 1); break;
+                            }
+                            
+                            const nextCell = document.querySelector(`.sudoku-cell[data-row="${nextRow}"][data-col="${nextCol}"]`);
+                            if (nextCell) nextCell.focus();
+                        }
+                        
+                        // Backspace/Delete handling
+                        if (e.key === 'Backspace' || e.key === 'Delete') {
+                            this.value = '';
+                            e.preventDefault();
+                        }
+                    });
+                    
+                    cell.addEventListener('focus', function() {
+                        activeCell = this;
+                    });
+                    
+                    // Handle keyboard input (for desktop)
+                    cell.addEventListener('keydown', function(e) {
+                        if (/^[1-9]$/.test(e.key)) {
+                            setCellValue(this, e.key);
+                            highlightNumber(e.key);
+                            e.preventDefault();
+                        }
+                    });
+                    
+                    gridContainer.appendChild(cell);
+                }
+            }
+            
+            // Add erase button handler
+            const eraseBtn = document.getElementById('erase-btn');
+            eraseBtn.addEventListener('click', function() {
+                if (activeCell) {
+                    activeCell.dataset.value = '';
+                    activeCell.textContent = '';
+                    clearHighlights();
+                }
+            });
+            
+            // Add number pad handlers
+            const numberBtns = document.querySelectorAll('.number-btn');
+            numberBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    if (activeCell) {
+                        setCellValue(activeCell, this.dataset.number);
+                        highlightNumber(this.dataset.number);
+                    }
+                });
+            });
+
+            function setCellValue(cell, value) {
+                const row = parseInt(cell.dataset.row);
+                const col = parseInt(cell.dataset.col);
+                
+                // Validate the move
+                if (value && !isValidPlacement(getCurrentGrid(), row, col, parseInt(value))) {
+                    statusEl.textContent = 'Invalid move! Same number exists in row, column or 3x3 box';
+                    return;
+                }
+                
+                cell.dataset.value = value;
+                cell.textContent = value || '';
+                statusEl.textContent = '';
+                if (!value) clearHighlights();
+            }
+
+            function clearHighlights() {
+                const cells = document.querySelectorAll('.sudoku-cell');
+                cells.forEach(cell => {
+                    cell.classList.remove('highlight');
+                });
+            }
+            
+            // Highlight all instances of a number
+            function highlightNumber(num) {
+                const cells = document.querySelectorAll('.sudoku-cell');
+                cells.forEach(cell => {
+                    cell.classList.remove('highlight');
+                    if (cell.dataset.value === num) {
+                        cell.classList.add('highlight');
+                    }
+                });
+            }
+            
+            // Solve button click handler
+            solveBtn.addEventListener('click', function() {
+                const grid = getCurrentGrid();
+                if (isValidSudoku(grid)) {
+                    statusEl.textContent = 'Solving...';
+                    setTimeout(() => {
+                        const solved = solveSudoku(grid);
+                        if (solved) {
+                            displayGrid(grid);
+                            statusEl.textContent = 'Solved successfully!';
+                        } else {
+                            statusEl.textContent = 'No solution exists for this puzzle.';
+                        }
+                    }, 50);
+                } else {
+                    statusEl.textContent = 'Invalid Sudoku configuration. Please check your numbers.';
+                }
+            });
+            
+            // Clear button click handler
+            clearBtn.addEventListener('click', function() {
+                const cells = document.querySelectorAll('.sudoku-cell');
+                cells.forEach(cell => {
+                    cell.dataset.value = '';
+                    cell.textContent = '';
+                });
+                statusEl.textContent = '';
+                clearHighlights();
+            });
+            
+            // Example button click handler
+            exampleBtn.addEventListener('click', function() {
+                const exampleGrid = [
+                    [5, 3, 0, 0, 7, 0, 0, 0, 0],
+                    [6, 0, 0, 1, 9, 5, 0, 0, 0],
+                    [0, 9, 8, 0, 0, 0, 0, 6, 0],
+                    [8, 0, 0, 0, 6, 0, 0, 0, 3],
+                    [4, 0, 0, 8, 0, 3, 0, 0, 1],
+                    [7, 0, 0, 0, 2, 0, 0, 0, 6],
+                    [0, 6, 0, 0, 0, 0, 2, 8, 0],
+                    [0, 0, 0, 4, 1, 9, 0, 0, 5],
+                    [0, 0, 0, 0, 8, 0, 0, 7, 9]
+                ];
+                displayGrid(exampleGrid);
+                statusEl.textContent = 'Example puzzle loaded. Click "Solve" to see the solution.';
+            });
+            
+            // Get current grid state from DOM
+            function getCurrentGrid() {
+                const grid = Array(9).fill().map(() => Array(9).fill(0));
+                const cells = document.querySelectorAll('.sudoku-cell');
+                
+                cells.forEach(cell => {
+                    const row = parseInt(cell.dataset.row);
+                    const col = parseInt(cell.dataset.col);
+                    grid[row][col] = cell.dataset.value ? parseInt(cell.dataset.value) : 0;
+                });
+                
+                return grid;
+            }
+            
+            // Display grid in DOM
+            function displayGrid(grid) {
+                const cells = document.querySelectorAll('.sudoku-cell');
+                
+                cells.forEach(cell => {
+                    const row = parseInt(cell.dataset.row);
+                    const col = parseInt(cell.dataset.col);
+                    cell.dataset.value = grid[row][col] === 0 ? '' : grid[row][col].toString();
+                    cell.textContent = grid[row][col] === 0 ? '' : grid[row][col].toString();
+                });
+            }
+            
+            // Check if current grid is valid
+            function isValidSudoku(grid) {
+                // Check rows
+                for (let i = 0; i < 9; i++) {
+                    const row = new Set();
+                    for (let j = 0; j < 9; j++) {
+                        const num = grid[i][j];
+                        if (num !== 0) {
+                            if (row.has(num)) return false;
+                            row.add(num);
+                        }
+                    }
+                }
+                
+                // Check columns
+                for (let j = 0; j < 9; j++) {
+                    const col = new Set();
+                    for (let i = 0; i < 9; i++) {
+                        const num = grid[i][j];
+                        if (num !== 0) {
+                            if (col.has(num)) return false;
+                            col.add(num);
+                        }
+                    }
+                }
+                
+                // Check 3x3 boxes
+                for (let box = 0; box < 9; box++) {
+                    const boxSet = new Set();
+                    const startRow = Math.floor(box / 3) * 3;
+                    const startCol = (box % 3) * 3;
+                    
+                    for (let i = 0; i < 3; i++) {
+                        for (let j = 0; j < 3; j++) {
+                            const num = grid[startRow + i][startCol + j];
+                            if (num !== 0) {
+                                if (boxSet.has(num)) return false;
+                                boxSet.add(num);
+                            }
+                        }
+                    }
+                }
+                
+                return true;
+            }
+            
+            // Sudoku solving algorithm (backtracking)
+            function solveSudoku(grid) {
+                for (let row = 0; row < 9; row++) {
+                    for (let col = 0; col < 9; col++) {
+                        if (grid[row][col] === 0) {
+                            for (let num = 1; num <= 9; num++) {
+                                if (isValidPlacement(grid, row, col, num)) {
+                                    grid[row][col] = num;
+                                    
+                                    if (solveSudoku(grid)) {
+                                        return true;
+                                    }
+                                    
+                                    grid[row][col] = 0;
+                                }
+                            }
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            }
+            
+            function isValidPlacement(grid, row, col, num) {
+                // Check row
+                for (let i = 0; i < 9; i++) {
+                    if (grid[row][i] === num) return false;
+                }
+                
+                // Check column
+                for (let i = 0; i < 9; i++) {
+                    if (grid[i][col] === num) return false;
+                }
+                
+                // Check 3x3 box
+                const boxStartRow = Math.floor(row / 3) * 3;
+                const boxStartCol = Math.floor(col / 3) * 3;
+                
+                for (let i = 0; i < 3; i++) {
+                    for (let j = 0; j < 3; j++) {
+                        if (grid[boxStartRow + i][boxStartCol + j] === num) return false;
+                    }
+                }
+                
+                return true;
+            }
+        });
+    </script>
+</body>
+</html>
