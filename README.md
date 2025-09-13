@@ -32,7 +32,7 @@ Ever stared at a Sudoku grid for hours, convinced you’re missing something obv
 ---
 
 ## **🌐 Try It Now**
-👉 **[Live Demo](#)**
+👉 **[Live Demo](https://bvsymind.github.io/sudoku-solver-pwa/)**
 
 ---
 
